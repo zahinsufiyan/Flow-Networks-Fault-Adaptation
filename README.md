@@ -35,6 +35,24 @@ pip install -U 'mujoco-py<2.2,>=2.1'
 
 #### Train continuous flow network of different environments.
 ```bash
+
+#### Create a Malfunctioning Reacher
+
+To create a malfunctioning Ant, the following steps must be taken:
+* xml file
+  * within the custom_gym_envs/envs/reacher/xml folder, copy and paste ReacherEnv_v0_Normal.xml, editing the version of the .xml filename
+  * add malfunctions
+* python file
+  * within the custom_gym_envs/envs/reacher folder, copy and paste ReacherEnv_v0_Normal.py, editing the version of the .py filename
+  * update the class name with the version number
+  * update the filepath instance variable for the class with the path to the appropriate xml file
+* init file
+  * add new environment to custom_gym_envs/__init__.py
+
+
+Do not edit:
+* openai/custom_gym_envs/envs/ant/AntEnv_v0_Normal.py
+* openai/custom_gym_envs/envs/ant/xml/AntEnv_v0_Normal.xml
 # Reacher
 python CFN_Reacher.py
 ```
