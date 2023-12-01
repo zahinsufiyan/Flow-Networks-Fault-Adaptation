@@ -39,3 +39,22 @@ pip install -U 'mujoco-py<2.2,>=2.1'
 python CFN_Reacher.py
 ```
 
+#### Create a Malfunctioning Reacher
+
+To create a malfunctioning Ant, the following steps must be taken:
+* xml file
+  * within the custom_gym_envs/envs/reacher/xml folder, copy and paste ReacherEnv_v0_Normal.xml, editing the version of the .xml filename
+  * add malfunctions
+* python file
+  * within the custom_gym_envs/envs/reacher folder, copy and paste ReacherEnv_v0_Normal.py, editing the version of the .py filename
+  * update the class name with the version number
+  * update the filepath instance variable for the class with the path to the appropriate xml file
+* init file
+  * add new environment to custom_gym_envs/__init__.py
+
+
+Do not edit:
+* custom_gym_envs/envs/reacher/ReacherEnv_v0_Normal.py
+* custom_gym_envs/envs/reacher/xml/ReacherEnv_v0_Normal.xml
+
+
