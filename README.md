@@ -57,4 +57,6 @@ Do not edit:
 * custom_gym_envs/envs/reacher/ReacherEnv_v0_Normal.py
 * custom_gym_envs/envs/reacher/xml/ReacherEnv_v0_Normal.xml
 
+## Reinforcement Learning Implementations for Comparative analysis
 
+Hyper-parameters can be modified with different arguments to main.py. We include an implementation of DDPG (DDPG.py) and TD3 (TD3.py), which is used for easy comparison with CFlowNets.
