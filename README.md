@@ -12,7 +12,8 @@ See `requirments.txt` file for more information about how to install the depende
 
 #### Install mujoco 210
 1. [Download](https://mujoco.org/) and [install](https://github.com/openai/mujoco-py#install-mujoco) MuJoCo.
-2. ```bash
+or,
+
 cd ~/download/
 wget -c https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
 mkdir ~/.mujoco
