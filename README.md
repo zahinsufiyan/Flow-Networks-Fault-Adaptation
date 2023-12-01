@@ -1,8 +1,7 @@
-# [ICLR 2023] CFlowNets: Continuous Control with Generative Flow Networks
+CFlowNets: Continuous Control with Generative Flow Networks for Fault Adaptation
 
+CFlowNets Paper:
 [![arXiv](https://img.shields.io/badge/arXiv-2303.02430-b31b1b.svg)](https://arxiv.org/abs/2303.02430)
-
-Official codebase for paper [CFlowNets: Continuous Control with Generative Flow Networks](https://arxiv.org/abs/2303.02430).
 
 
 ## Prerequisites
@@ -12,13 +11,12 @@ Official codebase for paper [CFlowNets: Continuous Control with Generative Flow 
 See `requirments.txt` file for more information about how to install the dependencies.
 
 #### Install mujoco 210
-```bash
+1. [Download](https://mujoco.org/) and [install](https://github.com/openai/mujoco-py#install-mujoco) MuJoCo.
+2. ```bash
 cd ~/download/
 wget -c https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
 mkdir ~/.mujoco
 cd ~/.mujoco
-tar -zxvf ~/download/mujoco210-linux-x86_64.tar.gz mujoco210
-
 tar -zxvf ~/download/mujoco210-linux-x86_64.tar.gz mujoco210
 
 
