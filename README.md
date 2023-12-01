@@ -1,4 +1,4 @@
-CFlowNets: Continuous Control with Generative Flow Networks for Fault Adaptation
+## CFlowNets: Continuous Control with Generative Flow Networks for Fault Adaptation
 
 CFlowNets Paper:
 [![arXiv](https://img.shields.io/badge/arXiv-2303.02430-b31b1b.svg)](https://arxiv.org/abs/2303.02430)
