@@ -54,9 +54,7 @@ To create a malfunctioning Ant, the following steps must be taken:
 
 
 Do not edit:
-* openai/custom_gym_envs/envs/ant/AntEnv_v0_Normal.py
-* openai/custom_gym_envs/envs/ant/xml/AntEnv_v0_Normal.xml
-# Reacher
-python CFN_Reacher.py
-```
+* custom_gym_envs/envs/reacher/ReacherEnv_v0_Normal.py
+* custom_gym_envs/envs/reacher/xml/ReacherEnv_v0_Normal.xml
+
 
