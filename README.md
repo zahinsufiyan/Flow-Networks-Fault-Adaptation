@@ -35,6 +35,9 @@ pip install -U 'mujoco-py<2.2,>=2.1'
 
 #### Train continuous flow network of different environments.
 ```bash
+# Reacher
+python CFN_Reacher.py
+```
 
 #### Create a Malfunctioning Reacher
 
