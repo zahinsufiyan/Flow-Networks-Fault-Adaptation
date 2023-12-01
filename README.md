@@ -31,35 +31,9 @@ pip install -U 'mujoco-py<2.2,>=2.1'
 
 ## Usage
 
-Please follow the instructions below to replicate the results in the paper.
-
-#### Train retrieval network of different environments.
-```bash
-# Reacher
-python Retrieval_Reacher.py
-```
-
-
 #### Train continuous flow network of different environments.
 ```bash
 # Reacher
 python CFN_Reacher.py
 ```
 
-
-## Citation
-
-If you find this work useful for your research, please cite our paper:
-
-```
-@inproceedings{li2023,
-  title={CFlowNets: Continuous Control with Generative Flow Networks},
-  author={Yinchuan Li and Shuang Luo and Haozhi Wang and Jianye Hao},
-  booktitle={International Conference on Learning Representations},
-  year={2023}
-}
-```
-
-## Contact
-
-Please feel free to contact me via email (<luoshuang@zju.edu.cn>) if you are interested in my research :)
