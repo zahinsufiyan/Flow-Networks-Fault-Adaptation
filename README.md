@@ -73,3 +73,9 @@ We introduced four different fault scenarios to evaluate the adaptive capabiliti
 ## Reinforcement Learning Implementations for Comparative analysis
 
 Hyper-parameters can be modified with different arguments to main.py. We include an implementation of DDPG (DDPG.py) and TD3 (TD3.py), which is used for easy comparison with CFlowNets.
+
+PPO Implementation
+The PPO implementation is derived from the Stable Baselines3 library with added modifications for evaluation and monitoring. The stable baselines3 version includes features like the clipped surrogate objective, linear learning decay, and generalized advantage estimator (GAE) (A. Raffin, A. Hill, M. Ernestus, A. Gleave, A. Kanervisto, Stable baselines3: Reliable reinforcement learning implementations (2021).
+
+SAC Implementation
+The SAC implementation is based on the PyTorch version from the official repository. It includes a three-layer network for the actor and critic, a learning rate of 0.0001, and a learnable temperature parameter for optimizing entropy during training (D. Yarats, I. Kostrikov, Soft actor-critic (sac) implementation in PyTorch, 2020).
