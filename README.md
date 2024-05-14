@@ -57,6 +57,22 @@ Do not edit:
 * custom_gym_envs/envs/reacher/ReacherEnv_v0_Normal.py
 * custom_gym_envs/envs/reacher/xml/ReacherEnv_v0_Normal.xml
 
+## Fault Scenarios
+We introduced four different fault scenarios to evaluate the adaptive capabilities of CFlowNets:
+
+Reduced Range of Motion:
+
+Simulated by adjusting the <joint> element’s range attribute within the Reacher-v2’s XML file from "-3.0 3.0" radians to "-1.0 1.0" radians.
+Increased Damping:
+
+Simulated by increasing the damping attribute value in the <joint> element from "1" to "5".
+Actuator Damage:
+
+Simulated by modifying the gear attribute of the <motor> element within the XML file from "200.0" to "100.0".
+Structural Damage:
+
+Simulated by bending the link1 of the arm in the XML configuration.
+
 ## Reinforcement Learning Implementations for Comparative analysis
 
 Hyper-parameters can be modified with different arguments to main.py. We include an implementation of DDPG (DDPG.py) and TD3 (TD3.py), which is used for easy comparison with CFlowNets.
