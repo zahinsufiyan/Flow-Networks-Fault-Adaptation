@@ -1,41 +1,34 @@
 import gym
-gym.make('Reacher-v2')
-
 import random
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Categorical
-
-use_cuda = torch.cuda.is_available()
-device   = torch.device("cuda" if use_cuda else "cpu")
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 
-now_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class RewardShapeWrapper(gym.Wrapper):
+current_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+
+class ModifiedRewardWrapper(gym.Wrapper):
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
-        if done == False:
-            reward = 0
-        else:
-            reward = info['reward_dist']
+        reward = 0 if not done else info['reward_dist']
         return observation, reward, done, info
 
-
-class ReplayBuffer:
+class BufferReplay:
     def __init__(self, capacity):
         self.capacity = capacity
         self.buffer = []
-        self.position = 0
+        self.pos = 0
 
-    def push(self, state, action, reward, next_state, done):
+    def add(self, state, action, reward, next_state, done):
         if len(self.buffer) < self.capacity:
             self.buffer.append(None)
-        self.buffer[self.position] = (state, action, reward, next_state, done)
-        self.position = (self.position + 1) % self.capacity
+        self.buffer[self.pos] = (state, action, reward, next_state, done)
+        self.pos = (self.pos + 1) % self.capacity
 
     def sample(self, batch_size):
         batch = random.sample(self.buffer, batch_size)
@@ -45,85 +38,57 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.buffer)
 
-
-class NormalizedActions(gym.ActionWrapper):
+class ActionNormalizer(gym.ActionWrapper):
     def action(self, action):
         low = self.action_space.low
         high = self.action_space.high
-
         action = low + (action + 1.0) * 0.5 * (high - low)
         action = np.clip(action, low, high)
-
         return action
 
     def reverse_action(self, action):
         low = self.action_space.low
         high = self.action_space.high
-
         action = 2 * (action - low) / (high - low) - 1
         action = np.clip(action, low, high)
-
         return action
 
-
-class Retrieval(nn.Module):
+class StateRetrieval(nn.Module):
     def __init__(self, state_dim, action_dim):
-        super(Retrieval, self).__init__()
-
-        self.l1 = nn.Linear(state_dim + action_dim, 256)
-        self.l2 = nn.Linear(256, 256)
-        self.l3 = nn.Linear(256, 256)
-        self.l4 = nn.Linear(256, state_dim)
+        super(StateRetrieval, self).__init__()
+        self.fc1 = nn.Linear(state_dim + action_dim, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 256)
+        self.fc4 = nn.Linear(256, state_dim)
 
     def forward(self, state, action):
-        sa = torch.cat([state, action], -1)
+        x = torch.cat([state, action], dim=-1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
+        return x
 
-        q1 = F.relu(self.l1(sa))
-        q1 = F.relu(self.l2(q1))
-        q1 = F.relu(self.l3(q1))
-        q1 = self.l4(q1)
-
-        return q1
-
-
-class Network(nn.Module):
+class FlowNetwork(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_dim):
-        super(Network, self).__init__()
-
-        # Edge flow network architecture
-        self.l1 = nn.Linear(state_dim + action_dim, hidden_dim)
-        self.l2 = nn.Linear(hidden_dim, hidden_dim)
-        self.l3 = nn.Linear(hidden_dim, 1)
+        super(FlowNetwork, self).__init__()
+        self.fc1 = nn.Linear(state_dim + action_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, 1)
 
     def forward(self, state, action):
-        sa = torch.cat([state, action], -1)
+        x = torch.cat([state, action], dim=-1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.softplus(self.fc3(x))
+        return x
 
-        q1 = F.relu(self.l1(sa))
-        q1 = F.relu(self.l2(q1))
-        q1 = F.softplus(self.l3(q1))
-        return q1
-    
-
-class CFN(object):
-    def __init__(
-            self,
-            state_dim,
-            action_dim,
-            hidden_dim,
-            max_action,
-            uniform_action_size,
-            discount=0.99,
-            tau=0.005,
-            policy_noise=0.2,
-            noise_clip=0.5,
-            policy_freq=2
-    ):
-
-        self.network = Network(state_dim, action_dim, hidden_dim).to(device)
+class ContinuousFlowNetwork:
+    def __init__(self, state_dim, action_dim, hidden_dim, max_action, uniform_action_size, discount=0.99, tau=0.005, policy_noise=0.2, noise_clip=0.5, policy_freq=2):
+        self.network = FlowNetwork(state_dim, action_dim, hidden_dim).to(device)
         self.network_optimizer = torch.optim.Adam(self.network.parameters(), lr=3e-4)
-        self.retrieval = Retrieval(state_dim, action_dim).to(device)
-        self.retrieval_optimizer = torch.optim.Adam(self.retrieval.parameters(), lr=3e-5)
-
+        self.state_retrieval = StateRetrieval(state_dim, action_dim).to(device)
+        self.retrieval_optimizer = torch.optim.Adam(self.state_retrieval.parameters(), lr=3e-5)
         self.max_action = max_action
         self.discount = discount
         self.tau = tau
@@ -131,85 +96,64 @@ class CFN(object):
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
         self.uniform_action_size = uniform_action_size
-        self.uniform_action = np.random.uniform(low=-max_action, high=max_action, size=(uniform_action_size, 2))
-        self.uniform_action = torch.Tensor(self.uniform_action).to(device)
+        self.uniform_action = torch.Tensor(np.random.uniform(low=-max_action, high=max_action, size=(uniform_action_size, 2))).to(device)
+        self.iterations = 0
 
-        self.total_it = 0
-
-    def select_action(self, state, is_max):
-        sample_action = np.random.uniform(low=-self.max_action, high=self.max_action, size=(10000, 2))
+    def select_action(self, state, use_max):
+        sampled_actions = torch.Tensor(np.random.uniform(low=-self.max_action, high=self.max_action, size=(10000, 2))).to(device)
+        state_tensor = torch.FloatTensor(state.reshape(1, -1)).repeat(10000, 1).to(device)
         with torch.no_grad():
-            sample_action = torch.Tensor(sample_action).to(device)
-            state = torch.FloatTensor(state.reshape(1, -1)).repeat(10000, 1).to(device)
-            edge_flow = self.network(state, sample_action).reshape(-1)
-            if is_max == 0:
-                idx = Categorical(edge_flow.float()).sample(torch.Size([1]))
-                action = sample_action[idx[0]]
-            elif is_max == 1:
-                action = sample_action[edge_flow.argmax()]
-        return action.cpu().data.numpy().flatten()
+            edge_flow = self.network(state_tensor, sampled_actions).reshape(-1)
+            action = sampled_actions[edge_flow.argmax()] if use_max else sampled_actions[Categorical(edge_flow.float()).sample(torch.Size([1]))[0]]
+        return action.cpu().numpy().flatten()
 
-    def set_uniform_action(self):
-        self.uniform_action = np.random.uniform(low=-max_action, high=max_action, size=(self.uniform_action_size, 2))
-        self.uniform_action = torch.Tensor(self.uniform_action).to(device)
+    def update_uniform_action(self):
+        self.uniform_action = torch.Tensor(np.random.uniform(low=-self.max_action, high=self.max_action, size=(self.uniform_action_size, 2))).to(device)
         return self.uniform_action
 
     def train(self, replay_buffer, frame_idx, batch_size=256, max_episode_steps=50, sample_flow_num=100):
-
-        # Sample replay buffer
         state, action, reward, next_state, not_done = replay_buffer.sample(batch_size)
-        state = torch.FloatTensor(state).to(device)
-        next_state = torch.FloatTensor(next_state).to(device)
-        action = torch.FloatTensor(action).to(device)
-        reward = torch.FloatTensor(reward).to(device)
-        not_done = torch.FloatTensor(np.float32(not_done)).to(device)
+        state, next_state, action, reward, not_done = [torch.FloatTensor(arr).to(device) for arr in [state, next_state, action, reward, not_done]]
 
         with torch.no_grad():
-            uniform_action = np.random.uniform(low=-max_action, high=max_action,size=(batch_size, max_episode_steps, sample_flow_num, 2))
-            uniform_action = torch.Tensor(uniform_action).to(device)
+            uniform_action = torch.Tensor(np.random.uniform(low=-self.max_action, high=self.max_action, size=(batch_size, max_episode_steps, sample_flow_num, 2))).to(device)
             current_state = next_state.repeat(1, 1, sample_flow_num).reshape(batch_size, max_episode_steps, sample_flow_num, -1)
-            inflow_state = self.retrieval(current_state, uniform_action)
-            inflow_state = torch.cat([inflow_state, state.reshape(batch_size, max_episode_steps, -1, state_dim)], -2)
-            uniform_action = torch.cat([uniform_action, action.reshape(batch_size, max_episode_steps, -1, action_dim)], -2)
-        edge_inflow = self.network(inflow_state, uniform_action).reshape(batch_size, max_episode_steps, -1)
+            inflow_state = self.state_retrieval(current_state, uniform_action)
+            inflow_state = torch.cat([inflow_state, state.view(batch_size, max_episode_steps, -1, state.shape[-1])], -2)
+            uniform_action = torch.cat([uniform_action, action.view(batch_size, max_episode_steps, -1, action.shape[-1])], -2)
+        edge_inflow = self.network(inflow_state, uniform_action).view(batch_size, max_episode_steps, -1)
 
-        epi = torch.Tensor([1.0]).repeat(batch_size * max_episode_steps).reshape(batch_size, -1).to(device)
-        inflow = torch.log(torch.sum(torch.exp(torch.log(edge_inflow)), -1) + epi)
+        inflow = torch.log(torch.sum(torch.exp(edge_inflow), dim=-1) + 1.0)
 
         with torch.no_grad():
-            uniform_action = np.random.uniform(low=-max_action, high=max_action, size=(batch_size, max_episode_steps, sample_flow_num, action_dim))
-            uniform_action = torch.Tensor(uniform_action).to(device)
-            outflow_state = next_state.repeat(1, 1, (sample_flow_num + 1)).reshape(batch_size, max_episode_steps,(sample_flow_num + 1), -1)
-            last_action = torch.Tensor([0.0, 0.0]).reshape([1, 1, action_dim]).repeat(batch_size, 1, 1).to(device)
-            last_action = torch.cat([action[:, 1:, :], last_action], -2)
-            uniform_action = torch.cat([uniform_action, last_action.reshape(batch_size, max_episode_steps, -1, action_dim)], -2)
+            uniform_action = torch.Tensor(np.random.uniform(low=-self.max_action, high=self.max_action, size=(batch_size, max_episode_steps, sample_flow_num, action.shape[-1]))).to(device)
+            outflow_state = next_state.repeat(1, 1, sample_flow_num + 1).reshape(batch_size, max_episode_steps, sample_flow_num + 1, -1)
+            last_action = torch.cat([action[:, 1:, :], torch.zeros(batch_size, 1, action.shape[-1]).to(device)], dim=1).view(batch_size, max_episode_steps, -1, action.shape[-1])
+            uniform_action = torch.cat([uniform_action, last_action], dim=-2)
+        edge_outflow = self.network(outflow_state, uniform_action).view(batch_size, max_episode_steps, -1)
 
-        edge_outflow = self.network(outflow_state, uniform_action).reshape(batch_size, max_episode_steps, -1)
-
-        outflow = torch.log(torch.sum(torch.exp(torch.log(edge_outflow)), -1) + epi)
-        network_loss = F.mse_loss(inflow * not_done, outflow * not_done, reduction='none') + F.mse_loss(inflow * done_true, (torch.cat([reward[:,:-1],torch.log(((reward*(sample_flow_num+1))+epi)[:,-1]).reshape(batch_size,-1)], -1)) * done_true, reduction='none')
-
-        network_loss = torch.mean(torch.sum(network_loss, dim = 1))
+        outflow = torch.log(torch.sum(torch.exp(edge_outflow), dim=-1) + 1.0)
+        network_loss = F.mse_loss(inflow * not_done, outflow * not_done, reduction='none') + F.mse_loss(inflow * (1 - not_done), reward + 1.0, reduction='none')
+        network_loss = torch.mean(torch.sum(network_loss, dim=1))
         print(network_loss)
+
         self.network_optimizer.zero_grad()
         network_loss.backward()
         self.network_optimizer.step()
 
         if frame_idx % 5 == 0:
-            pre_state = self.retrieval(next_state, action)
+            pre_state = self.state_retrieval(next_state, action)
             retrieval_loss = F.mse_loss(pre_state, state)
             print(retrieval_loss)
-
-            # Optimize the network
             self.retrieval_optimizer.zero_grad()
             retrieval_loss.backward()
             self.retrieval_optimizer.step()
 
-writer = SummaryWriter(log_dir="runs/CFN_Reacher_"+now_time)
+writer = SummaryWriter(log_dir="runs/CFN_Reacher_" + current_time)
 
-max_episode_steps = 50
-env = RewardShapeWrapper(gym.make('Reacher-v2'))
-test_env = RewardShapeWrapper(gym.make('Reacher-v2'))
+max_steps = 50
+env = ModifiedRewardWrapper(gym.make('Reacher-v2'))
+test_env = ModifiedRewardWrapper(gym.make('Reacher-v2'))
 
 action_dim = env.action_space.shape[0]
 state_dim = env.observation_space.shape[0]
@@ -217,89 +161,77 @@ max_action = float(env.action_space.high[0])
 hidden_dim = 256
 uniform_action_size = 2000
 
-policy = CFN(state_dim, action_dim, hidden_dim, max_action, uniform_action_size)
-policy.retrieval.load_state_dict(torch.load('retrieval_reacher_sparse.pkl'))
+policy = ContinuousFlowNetwork(state_dim, action_dim, hidden_dim, max_action, uniform_action_size)
+policy.state_retrieval.load_state_dict(torch.load('retrieval_reacher_sparse.pkl'))
 
+replay_buffer = BufferReplay(2000)
 
-replay_buffer_size = 2000
-replay_buffer = ReplayBuffer(replay_buffer_size)
-
-max_frames = 2000
-start_timesteps = 150
-frame_idx = 0
-rewards = []
-test_rewards = []
-x_idx = []
+total_frames = 2000
+initial_timesteps = 150
+current_frame = 0
+rewards_list = []
+test_rewards_list = []
+episode_indices = []
 batch_size = 128
-test_epoch = 0
+test_intervals = 0
 expl_noise = 0.4
-sample_flow_num = 99
-repeat_episode_num = 5
-sample_episode_num = 1000
+flow_samples = 99
+repeat_episodes = 5
+sample_episodes = 1000
 
-done_true = torch.zeros(batch_size, max_episode_steps).to(device)
-for i in done_true:
-    i[max_episode_steps-1] = 1.0
+done_tensor = torch.zeros(batch_size, max_steps).to(device)
+done_tensor[:, -1] = 1.0
 
-def reward_shaping(reward):
-    low = -1.0
-    high = 0.0
-    reward = (reward - low) / (high - low)
-    return reward
+def adjust_reward(reward):
+    low, high = -1.0, 0.0
+    return (reward - low) / (high - low)
 
-
-while frame_idx < max_frames:
+while current_frame < total_frames:
     state = env.reset()
     episode_reward = 0
 
-    state_buf = []
-    action_buf = []
-    reward_buf = []
-    next_state_buf = []
-    done_buf = []
-    for step in range(max_episode_steps):
+    states, actions, rewards, next_states, dones = [], [], [], [], []
+
+    for step in range(max_steps):
         with torch.no_grad():
-            action = policy.select_action(state, 0)
-
+            action = policy.select_action(state, False)
         next_state, reward, done, _ = env.step(action)
+        done_flag = float(not done)
 
-        done_bool = float(1. - done)
-
-        state_buf.append(state)
-        action_buf.append(action)
-        reward_buf.append(reward_shaping(reward))
-        next_state_buf.append(next_state)
-        done_buf.append(done_bool)
+        states.append(state)
+        actions.append(action)
+        rewards.append(adjust_reward(reward))
+        next_states.append(next_state)
+        dones.append(done_flag)
 
         state = next_state
         episode_reward += reward
 
         if done:
-            frame_idx += 1
-            replay_buffer.push(state_buf, action_buf, reward_buf, next_state_buf, done_buf)
+            current_frame += 1
+            replay_buffer.add(states, actions, rewards, next_states, dones)
             break
 
-        if frame_idx >= start_timesteps and step % 7 == 0:
-            policy.train(replay_buffer, frame_idx, batch_size, max_episode_steps, sample_flow_num)
+        if current_frame >= initial_timesteps and step % 7 == 0:
+            policy.train(replay_buffer, current_frame, batch_size, max_steps, flow_samples)
 
-    if frame_idx >= start_timesteps and frame_idx % 10 == 0:
-        print(frame_idx)
-        test_epoch += 1
-        avg_test_episode_reward = 0
-        for i in range(repeat_episode_num):
+    if current_frame >= initial_timesteps and current_frame % 10 == 0:
+        print(current_frame)
+        test_intervals += 1
+        avg_test_reward = 0
+
+        for _ in range(repeat_episodes):
             test_state = test_env.reset()
             test_episode_reward = 0
-            for s in range(max_episode_steps):
-                test_action = policy.select_action(np.array(test_state), 1)
 
-                test_next_state, test_reward, test_done, _ = test_env.step(test_action)
-
-                test_state = test_next_state
+            for _ in range(max_steps):
+                test_action = policy.select_action(test_state, True)
+                test_state, test_reward, test_done, _ = test_env.step(test_action)
                 test_episode_reward += test_reward
                 if test_done:
                     break
-            avg_test_episode_reward += test_episode_reward
 
-        torch.save(policy.network.state_dict(), "runs/gfn_reacher_all_" + now_time + '.pkl')
-        writer.add_scalar("gfn_reacher_max_reward", avg_test_episode_reward / repeat_episode_num, global_step=frame_idx * max_episode_steps)
+            avg_test_reward += test_episode_reward
 
+        torch.save(policy.network.state_dict(), f"runs/CFN_Reacher_{current_time}.pkl")
+        writer.add_scalar("MaxTestReward", avg_test_reward / repeat_episodes, global_step=current_frame * max_steps)
