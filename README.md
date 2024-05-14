@@ -60,15 +60,15 @@ Do not edit:
 ## Fault Scenarios
 We introduced four different fault scenarios to evaluate the adaptive capabilities of CFlowNets:
 
-Reduced Range of Motion:
+*Reduced Range of Motion:
 
-Simulated by adjusting the <joint> element’s range attribute within the Reacher-v2’s XML file from "-3.0 3.0" radians to "-1.0 1.0" radians.
-Increased Damping:
+ *Simulated by adjusting the <joint> element’s range attribute within the Reacher-v2’s XML file from "-3.0 3.0" radians to "-1.0 1.0" radians.
+*Increased Damping:
 
-Simulated by increasing the damping attribute value in the <joint> element from "1" to "5".
-Actuator Damage:
+ *Simulated by increasing the damping attribute value in the <joint> element from "1" to "5".
+*Actuator Damage:
 
-Simulated by modifying the gear attribute of the <motor> element within the XML file from "200.0" to "100.0".
+ *Simulated by modifying the gear attribute of the <motor> element within the XML file from "200.0" to "100.0".
 Structural Damage:
 
 Simulated by bending the link1 of the arm in the XML configuration.
